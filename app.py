@@ -4,10 +4,50 @@ from banco_dados import cardapio
 
 st.set_page_config(page_title="Caixa Mix Fruits", page_icon="🍇", layout="wide")
 
+# 🔒 SISTEMA DE AUTENTICAÇÃO NATIVO
+# Inicializa o estado de login se não existir
+if "logado" not in st.session_state:
+    st.session_state.logado = False
+
+# Se não estiver logado, exibe a tela de login
+if not st.session_state.logado:
+    st.title("🍇 Acesso ao Sistema - Mix Fruits")
+    
+    col1, col2, col3 = st.columns([1, 1.5, 1])
+    with col2:
+        st.subheader("Por favor, faça o login para continuar")
+        usuario = st.text_input("Usuário:")
+        senha = st.text_input("Senha:", type="password")
+        
+        if st.button("Entrar", use_container_width=True, type="primary"):
+            # DEFINA AQUI O USUÁRIO E SENHA DO SISTEMA
+            if usuario == "admin" and senha == "mixfruits123":
+                st.session_state.logado = True
+                st.success("Acesso autorizado!")
+                st.rerun()
+            else:
+                st.error("Usuário ou senha incorretos.")
+    # Interrompe a execução do resto do código para quem não está logado
+    st.stop()
+
+# ==============================================================================
+# 🛍️ CÓDIGO DO SISTEMA (Só roda se st.session_state.logado for True)
+# ==============================================================================
+
 if "carrinho" not in st.session_state:
     st.session_state.carrinho = []
 
 st.title("🍇 Sistema de Vendas - Mix Fruits")
+
+# Botão de Logout no topo para segurança
+col_titulo, col_logout = st.columns([8, 2])
+with col_logout:
+    if st.button("🚪 Sair do Sistema", use_container_width=True):
+        st.session_state.logado = False
+        st.rerun()
+
+# Daqui para baixo, o seu código continua EXATAMENTE igual (as abas, colunas, etc.)
+# Certifique-se de manter o restante do arquivo intocado!
 
 aba_caixa, aba_historico = st.tabs(["🛍️ Tela de Vendas", "📊 Painel Gerencial"])
 
