@@ -5,7 +5,6 @@ from banco_dados import cardapio
 st.set_page_config(page_title="Caixa Mix Fruits", page_icon="🍇", layout="wide")
 
 # 🔒 SISTEMA DE AUTENTICAÇÃO NATIVO
-# Inicializa o estado de login se não existir
 if "logado" not in st.session_state:
     st.session_state.logado = False
 
@@ -20,14 +19,12 @@ if not st.session_state.logado:
         senha = st.text_input("Senha:", type="password")
         
         if st.button("Entrar", use_container_width=True, type="primary"):
-            # DEFINA AQUI O USUÁRIO E SENHA DO SISTEMA
             if usuario == "admin" and senha == "mixfruits123":
                 st.session_state.logado = True
                 st.success("Acesso autorizado!")
                 st.rerun()
             else:
                 st.error("Usuário ou senha incorretos.")
-    # Interrompe a execução do resto do código para quem não está logado
     st.stop()
 
 # ==============================================================================
@@ -45,9 +42,6 @@ with col_logout:
     if st.button("🚪 Sair do Sistema", use_container_width=True):
         st.session_state.logado = False
         st.rerun()
-
-# Daqui para baixo, o seu código continua EXATAMENTE igual (as abas, colunas, etc.)
-# Certifique-se de manter o restante do arquivo intocado!
 
 aba_caixa, aba_historico = st.tabs(["🛍️ Tela de Vendas", "📊 Painel Gerencial"])
 
@@ -116,7 +110,8 @@ with aba_caixa:
             col_finalizar, col_cancelar = st.columns(2)
             with col_finalizar:
                 if st.button("✅ Registrar Venda", use_container_width=True, type="primary"):
-                    operacoes.registrar_carrinho_no_banco(st.session_state.carrinho)
+                    # 🛠️ CORREÇÃO: Nome correto da função que criamos para o Supabase
+                    operacoes.registrar_venda_banco(st.session_state.carrinho)
                     st.success("🎉 Venda registrada com sucesso!")
                     st.session_state.carrinho = []
                     st.rerun()
@@ -130,10 +125,8 @@ with aba_caixa:
 with aba_historico:
     st.subheader("📊 Acompanhamento de Metas e Transações")
     
-    # 1. Busca os faturamentos calculados pelo Pandas
     fat_diario, fat_mensal = operacoes.calcular_faturamento_periodo()
     
-    # Criando duas colunas para destacar as metas de forma organizada
     m1, m2 = st.columns(2)
     with m1:
         st.metric(label="🎯 FATURAMENTO DIÁRIO (HOJE)", value=f"R$ {fat_diario:.2f}")
@@ -142,11 +135,10 @@ with aba_historico:
         
     st.markdown("---")
     
-    # 2. Busca a planilha de vendas (já vindo invertida do operacoes.py)
     df_vendas = operacoes.obter_dataframe_vendas()
     
     if df_vendas.empty:
-        st.info("Nenhuma venda registrada no arquivo CSV até o momento.")
+        st.info("Nenhuma venda registrada no banco de dados até o momento.")
     else:
         st.markdown("### 📋 Histórico Geral (Mais Recentes no Topo)")
         st.dataframe(df_vendas, use_container_width=True)

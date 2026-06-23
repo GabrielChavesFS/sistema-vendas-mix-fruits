@@ -1,73 +1,86 @@
-import os
-from datetime import datetime
 import pandas as pd
+from datetime import datetime
+from supabase import create_client, Client
 from banco_dados import cardapio
 
-ARQUIVO_VENDAS = "vendas.csv"
+# 🌐 CREDENCIAIS HTTP DO SUPABASE
+SUPABASE_URL = "https://cljhklrjrcgtwdudfesg.supabase.co"
+SUPABASE_KEY = "sb_publishable_bnU7EK6EBN6UvaKNJmu-1g_pD6VSqcv"
 
-def inicializar_arquivo_vendas():
-    if not os.path.exists(ARQUIVO_VENDAS):
-        df_vazio = pd.DataFrame(columns=["data_hora", "produto", "quantidade", "total"])
-        df_vazio.to_csv(ARQUIVO_VENDAS, index=False)
+# Inicializa o cliente web seguro
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-def calcular_total_item(produto, quantidade):
-    return cardapio[produto] * quantidade
-
-def registrar_carrinho_no_banco(carrinho):
+def registrar_venda_banco(carrinho):
+    """Grava os itens via requisição HTTPS na tabela do banco."""
     if not carrinho:
-        return
+        return False
         
-    inicializar_arquivo_vendas()
-    agora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    novos_registros = []
+    data_hora_atual = datetime.now().isoformat() # Formato de texto aceito via API
     
-    novas_linhas = []
     for item in carrinho:
-        novas_linhas.append({
-            "data_hora": agora,
-            "produto": item["produto"],
-            "quantidade": item["quantidade"],
-            "total": item["total"]
-        })
+        # Recupera o preço unitário do item
+        preco_unit = float(cardapio.get(item["produto"], 0.0))
         
-    df_existente = pd.read_csv(ARQUIVO_VENDAS)
-    df_novas_vendas = pd.DataFrame(novas_linhas)
+        novos_registros.append({
+            "data_hora": data_hora_atual,
+            "produto": item["produto"],
+            "quantidade": int(item["quantidade"]),
+            "preco_unitario": preco_unit,
+            "total": float(item["total"])
+        })
     
-    df_atualizado = pd.concat([df_existente, df_novas_vendas], ignore_index=True)
-    df_atualizado.to_csv(ARQUIVO_VENDAS, index=False)
+    # Envia os dados usando protocolo de internet comum (Porta 443)
+    supabase.table("vendas").insert(novos_registros).execute()
+    return True
 
 def obter_dataframe_vendas():
-    """Retorna o DataFrame completo, mas ordenado com as vendas mais recentes primeiro."""
-    inicializar_arquivo_vendas()
-    df = pd.read_csv(ARQUIVO_VENDAS)
+    """Busca o histórico via requisição HTTPS."""
+    resposta = supabase.table("vendas").select("*").execute()
+    df = pd.DataFrame(resposta.data)
     
     if not df.empty:
-        # Ordena pela coluna data_hora de forma decrescente (ascending=False)
+        df["data_hora"] = pd.to_datetime(df["data_hora"])
         df = df.sort_values(by="data_hora", ascending=False)
-        df = df.head(20)
-        
+        df = df.head(10)
     return df
 
 def calcular_faturamento_periodo():
-    """Calcula o faturamento do dia de hoje e do mês atual usando filtros do Pandas."""
-    inicializar_arquivo_vendas()
-    df = pd.read_csv(ARQUIVO_VENDAS)
+    """Busca os dados via HTTPS e calcula os faturamentos usando Pandas."""
+    resposta = supabase.table("vendas").select("*").execute()
+    df = pd.DataFrame(resposta.data)
     
     if df.empty:
         return 0.0, 0.0
         
-    # Garante que o Pandas entende a coluna como data/hora, exatamente como no seu exercício!
     df["data_hora"] = pd.to_datetime(df["data_hora"])
+    agora = datetime.now()
     
-    hoje = datetime.now().date()
-    mes_atual = datetime.now().month
-    ano_current = datetime.now().year
+    filtro_dia = (
+        (df["data_hora"].dt.year == agora.year) &
+        (df["data_hora"].dt.month == agora.month) &
+        (df["data_hora"].dt.day == agora.day)
+    )
     
-    # Filtro booleano para hoje
-    df_hoje = df[df["data_hora"].dt.date == hoje]
-    faturamento_diario = df_hoje["total"].sum()
+    filtro_mes = (
+        (df["data_hora"].dt.year == agora.year) &
+        (df["data_hora"].dt.month == agora.month)
+    )
     
-    # Filtro booleano para o mês e ano atuais
-    df_mes = df[(df["data_hora"].dt.month == mes_atual) & (df["data_hora"].dt.year == ano_current)]
-    faturamento_mensal = df_mes["total"].sum()
+    faturamento_diario = float(df[filtro_dia]["total"].sum())
+    faturamento_mensal = float(df[filtro_mes]["total"].sum())
     
     return faturamento_diario, faturamento_mensal
+
+def calcular_total_item(item, quantidade):
+    """
+    Calcula o valor total de um item.
+    Funciona recebendo tanto o nome em formato string quanto o dicionário do cardápio.
+    """
+    if isinstance(item, dict):
+        preco_unitario = float(item.get("preco", 0.0))
+    else:
+        # Se vier apenas a string (ex: 'Coxinha'), busca o preço no dicionário do cardápio
+        preco_unitario = float(cardapio.get(item, 0.0))
+        
+    return float(preco_unitario * quantidade)
